@@ -1,0 +1,31 @@
+{
+  "name": "orvix",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --stream -r --if-present dev",
+    "dev:api": "pnpm --filter @orvix/api dev",
+    "dev:mobile": "pnpm --filter @orvix/mobile dev",
+    "dev:admin": "pnpm --filter @orvix/admin dev",
+    "build": "pnpm --filter @orvix/database db:generate && pnpm -r --sort build",
+    "build:vercel": "pnpm --filter @orvix/database db:generate && pnpm -r --sort build && node scripts/prepare-vercel-output.mjs",
+    "typecheck": "pnpm --filter @orvix/types build && pnpm --filter @orvix/validation build && pnpm --filter @orvix/utils build && pnpm --filter @orvix/database build && pnpm -r --sort typecheck",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings=0",
+    "db:generate": "pnpm --filter @orvix/database db:generate",
+    "db:push": "pnpm --filter @orvix/database db:push",
+    "db:seed": "pnpm --filter @orvix/database db:seed"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/node": "^22.8.4",
+    "@vitest/coverage-v8": "^2.1.4",
+    "eslint": "^9.13.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.11.0",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

@@ -1,0 +1,687 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum Unit {
+  g
+  kg
+  mg
+  ml
+  L
+  cup
+  bowl
+  plate
+  tbsp
+  tsp
+  piece
+  egg
+  chapati
+  slice
+  serving
+  custom
+}
+
+enum FoodState {
+  RAW
+  COOKED
+  PREPARED
+  PACKAGED
+  UNKNOWN
+}
+
+enum VerificationState {
+  MANUFACTURER_VERIFIED
+  OFFICIAL_SOURCE
+  LICENSED_DATA
+  OPEN_DATA
+  USER_SUBMITTED
+  AI_ESTIMATED
+  UNVERIFIED
+}
+
+enum DataLifecycle {
+  DRAFT
+  REVIEW
+  VERIFIED
+  PUBLISHED
+  DEPRECATED
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+  CUSTOM
+}
+
+enum SetType {
+  WORKING
+  WARMUP
+  DROP
+  FAILURE
+  AMRAP
+}
+
+enum WorkoutSessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum SubmissionType {
+  FOOD
+  EXERCISE
+  PRODUCT
+  OCR_EXTRACTION
+  AI_ESTIMATE
+}
+
+model User {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  email          String    @unique
+  passwordHash   String
+  role           UserRole  @default(USER)
+  isActive       Boolean   @default(true)
+  deletionQueued Boolean   @default(false)
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  profile          UserProfile?
+  sessions         AuthSession[]
+  foods            Food[]              @relation("UserFoods")
+  favoriteFoods    FavoriteFood[]
+  recentFoods      RecentFood[]
+  meals            Meal[]
+  savedMeals       SavedMeal[]
+  recipes          Recipe[]
+  exercises        Exercise[]          @relation("UserExercises")
+  workoutCategories WorkoutCategory[]
+  workoutTemplates WorkoutTemplate[]
+  workoutSessions  WorkoutSession[]
+  programs         TrainingProgram[]
+  weightEntries    WeightEntry[]
+  waterEntries     WaterEntry[]
+  measurementEntries MeasurementEntry[]
+  progressPhotos   ProgressPhoto[]
+  aiConversations  AiConversation[]
+  recommendations  Recommendation[]
+  auditLogs         AuditLog[]
+  submissions       DataSubmission[]
+}
+
+model AuthSession {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String @db.ObjectId
+  tokenHash    String
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model UserProfile {
+  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId                 String   @unique @db.ObjectId
+  name                   String
+  profilePhotoUrl        String?
+  age                    Int?
+  sex                    String?
+  onboardingCompleted    Boolean  @default(false)
+  heightCm               Float?
+  currentWeightKg        Float?
+  startingWeightKg       Float?
+  targetWeightKg         Float?
+  primaryGoal            String?
+  activityLevel          String?
+  trainingExperience     String?
+  trainingFrequency      String?
+  workoutDurationMinutes Int?
+  availableEquipment     String[] @default([])
+  preferredTrainingStyle String?
+  calorieTarget          Float?
+  proteinTargetG         Float?
+  carbTargetG            Float?
+  fatTargetG             Float?
+  fiberTargetG           Float?
+  waterTargetMl          Float?
+  dietPreference         String?
+  preferredFoods         String[] @default([])
+  dislikedFoods          String[] @default([])
+  allergies              String[] @default([])
+  dietaryRestrictions    String[] @default([])
+  units                  String   @default("METRIC")
+  notificationPreferences Json    @default("{}")
+  reminderPreferences     Json   @default("{}")
+  privacySettings         Json   @default("{}")
+  aiPreferences           Json   @default("{}")
+  quietHours              Json   @default("{}")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FoodSource {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  name               String
+  sourceType         String
+  license            String?
+  sourceReference    String?
+  retrievedAt        DateTime?
+  effectiveAt        DateTime?
+  verificationStatus VerificationState @default(UNVERIFIED)
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  foods Food[]
+}
+
+model Brand {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String   @unique
+  aliases   String[] @default([])
+  website   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  foods Food[]
+}
+
+model Food {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId           String? @db.ObjectId
+  brandId           String? @db.ObjectId
+  sourceId          String? @db.ObjectId
+  name              String
+  normalizedName    String
+  aliases           String[]          @default([])
+  category          String?
+  foodState         FoodState         @default(UNKNOWN)
+  verificationState VerificationState @default(UNVERIFIED)
+  lifecycle         DataLifecycle     @default(DRAFT)
+  servingQuantity   Float
+  servingUnit       Unit
+  gramWeight        Float?
+  mlVolume          Float?
+  calories          Float?
+  proteinG          Float?
+  carbsG            Float?
+  fatG              Float?
+  saturatedFatG     Float?
+  fiberG            Float?
+  sugarG            Float?
+  sodiumMg          Float?
+  cholesterolMg     Float?
+  micronutrients    Json              @default("{}")
+  ingredients       String[]          @default([])
+  allergens         String[]          @default([])
+  notes             String?
+  popularity        Int               @default(0)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  owner          User?             @relation("UserFoods", fields: [ownerId], references: [id], onDelete: Cascade)
+  brand          Brand?            @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  source         FoodSource?       @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  barcodes       ProductBarcode[]
+  mealItems      MealItem[]
+  savedMealItems SavedMealItem[]
+  recipeItems    RecipeIngredient[]
+  favoriteFoods  FavoriteFood[]
+  recentFoods    RecentFood[]
+  submissions    DataSubmission[]
+
+  @@index([ownerId])
+  @@index([brandId])
+  @@index([normalizedName])
+  @@index([category])
+  @@index([lifecycle])
+}
+
+model ProductBarcode {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  code      String   @unique
+  format    String?
+  foodId    String @db.ObjectId
+  createdAt DateTime @default(now())
+
+  food Food @relation(fields: [foodId], references: [id], onDelete: Cascade)
+}
+
+model FavoriteFood {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String @db.ObjectId
+  foodId    String @db.ObjectId
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  food Food @relation(fields: [foodId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, foodId])
+}
+
+model RecentFood {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String @db.ObjectId
+  foodId    String @db.ObjectId
+  usedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  food Food @relation(fields: [foodId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, foodId])
+  @@index([usedAt])
+}
+
+model Meal {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String @db.ObjectId
+  date        DateTime
+  mealType    MealType
+  customName  String?
+  calories    Float?
+  proteinG    Float?
+  carbsG      Float?
+  fatG        Float?
+  fiberG      Float?
+  waterMl     Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items MealItem[]
+
+  @@index([userId, date])
+  @@index([userId, mealType, date])
+}
+
+model MealItem {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  mealId         String @db.ObjectId
+  foodId         String @db.ObjectId
+  quantity       Float
+  unit           Unit
+  foodSnapshot   Json
+  calories       Float?
+  proteinG       Float?
+  carbsG         Float?
+  fatG           Float?
+  fiberG         Float?
+  micronutrients Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  food Food @relation(fields: [foodId], references: [id], onDelete: Restrict)
+
+  @@index([mealId])
+}
+
+model SavedMeal {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String @db.ObjectId
+  name        String
+  mealType    MealType?
+  isFavorite  Boolean  @default(false)
+  calories    Float?
+  proteinG    Float?
+  carbsG      Float?
+  fatG        Float?
+  fiberG      Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items SavedMealItem[]
+
+  @@index([userId])
+}
+
+model SavedMealItem {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  savedMealId  String @db.ObjectId
+  foodId       String @db.ObjectId
+  quantity     Float
+  unit         Unit
+  foodSnapshot Json
+
+  savedMeal SavedMeal @relation(fields: [savedMealId], references: [id], onDelete: Cascade)
+  food      Food      @relation(fields: [foodId], references: [id], onDelete: Restrict)
+}
+
+model Recipe {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String @db.ObjectId
+  name        String
+  servings    Float
+  notes       String?
+  calories    Float?
+  proteinG    Float?
+  carbsG      Float?
+  fatG        Float?
+  fiberG      Float?
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ingredients RecipeIngredient[]
+
+  @@index([userId])
+}
+
+model RecipeIngredient {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  recipeId     String @db.ObjectId
+  foodId       String @db.ObjectId
+  quantity     Float
+  unit         Unit
+  foodSnapshot Json
+
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  food   Food   @relation(fields: [foodId], references: [id], onDelete: Restrict)
+}
+
+model Exercise {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId          String? @db.ObjectId
+  name             String
+  normalizedName   String
+  aliases          String[]      @default([])
+  primaryMuscles   String[]      @default([])
+  secondaryMuscles String[]      @default([])
+  equipment        String[]      @default([])
+  movementPattern  String?
+  difficulty       String?
+  instructions     String?
+  safetyNotes      String?
+  mediaUrl         String?
+  lifecycle        DataLifecycle @default(PUBLISHED)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  owner              User?                     @relation("UserExercises", fields: [ownerId], references: [id], onDelete: Cascade)
+  templateExercises  WorkoutTemplateExercise[]
+  sessionExercises   WorkoutSessionExercise[]
+  submissions         DataSubmission[]
+
+  @@index([ownerId])
+  @@index([normalizedName])
+}
+
+model WorkoutCategory {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String @db.ObjectId
+  name        String
+  muscleFocus String[] @default([])
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workouts  WorkoutTemplate[]
+
+  @@unique([userId, name])
+}
+
+model WorkoutTemplate {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String @db.ObjectId
+  categoryId  String? @db.ObjectId
+  name        String
+  notes       String?
+  isFavorite  Boolean  @default(false)
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  WorkoutCategory?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  exercises WorkoutTemplateExercise[]
+  sessions  WorkoutSession[]
+  programDays TrainingProgramDay[]
+
+  @@index([userId])
+}
+
+model WorkoutTemplateExercise {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  workoutTemplateId String @db.ObjectId
+  exerciseId        String @db.ObjectId
+  order             Int
+  targetSets        Int?
+  notes             String?
+
+  workoutTemplate WorkoutTemplate @relation(fields: [workoutTemplateId], references: [id], onDelete: Cascade)
+  exercise        Exercise        @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@unique([workoutTemplateId, order])
+}
+
+model WorkoutSession {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String @db.ObjectId
+  workoutTemplateId String? @db.ObjectId
+  name              String
+  status            WorkoutSessionStatus @default(IN_PROGRESS)
+  startedAt         DateTime             @default(now())
+  completedAt       DateTime?
+  notes             String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  user            User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutTemplate WorkoutTemplate?          @relation(fields: [workoutTemplateId], references: [id], onDelete: SetNull)
+  exercises       WorkoutSessionExercise[]
+
+  @@index([userId, startedAt])
+}
+
+model WorkoutSessionExercise {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  workoutSessionId String @db.ObjectId
+  exerciseId       String @db.ObjectId
+  order            Int
+  notes            String?
+
+  workoutSession WorkoutSession @relation(fields: [workoutSessionId], references: [id], onDelete: Cascade)
+  exercise       Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  sets           WorkoutSet[]
+}
+
+model WorkoutSet {
+  id                       String   @id @default(auto()) @map("_id") @db.ObjectId
+  workoutSessionExerciseId String @db.ObjectId
+  setNumber                Int
+  weight                   Float?
+  weightUnit               String?
+  reps                     Int?
+  rpe                      Float?
+  rir                      Float?
+  durationSeconds          Int?
+  distance                 Float?
+  distanceUnit             String?
+  restSeconds              Int?
+  setType                  SetType @default(WORKING)
+  notes                    String?
+  createdAt                DateTime @default(now())
+
+  workoutSessionExercise WorkoutSessionExercise @relation(fields: [workoutSessionExerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([workoutSessionExerciseId, setNumber])
+}
+
+model TrainingProgram {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String @db.ObjectId
+  name        String
+  description String?
+  isFavorite  Boolean  @default(false)
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  days TrainingProgramDay[]
+
+  @@index([userId])
+}
+
+model TrainingProgramDay {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  trainingProgramId String @db.ObjectId
+  workoutTemplateId String? @db.ObjectId
+  name              String
+  order             Int
+  notes             String?
+
+  program         TrainingProgram @relation(fields: [trainingProgramId], references: [id], onDelete: Cascade)
+  workoutTemplate WorkoutTemplate? @relation(fields: [workoutTemplateId], references: [id], onDelete: SetNull)
+
+  @@unique([trainingProgramId, order])
+}
+
+model WeightEntry {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String @db.ObjectId
+  measuredAt DateTime @default(now())
+  weightKg   Float
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, measuredAt])
+}
+
+model WaterEntry {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String   @db.ObjectId
+  date       DateTime
+  amountMl   Float
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+}
+
+model MeasurementEntry {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String @db.ObjectId
+  measuredAt DateTime @default(now())
+  location   String
+  valueCm    Float
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, measuredAt])
+}
+
+model ProgressPhoto {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String @db.ObjectId
+  capturedAt DateTime @default(now())
+  fileUrl    String
+  pose       String?
+  isPrivate  Boolean  @default(true)
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, capturedAt])
+}
+
+model AiConversation {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String @db.ObjectId
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+}
+
+model AiMessage {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  aiConversationId String @db.ObjectId
+  role             String
+  content          String
+  retrievedContext Json     @default("{}")
+  createdAt        DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [aiConversationId], references: [id], onDelete: Cascade)
+}
+
+model Recommendation {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String @db.ObjectId
+  type      String
+  title     String
+  body      String
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DataSubmission {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String? @db.ObjectId
+  foodId         String? @db.ObjectId
+  exerciseId     String? @db.ObjectId
+  type           SubmissionType
+  payload        Json
+  verificationState VerificationState @default(USER_SUBMITTED)
+  lifecycle      DataLifecycle  @default(REVIEW)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  notes          String?
+  createdAt      DateTime       @default(now())
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  food     Food?     @relation(fields: [foodId], references: [id], onDelete: SetNull)
+  exercise Exercise? @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
+
+  @@index([lifecycle])
+  @@index([verificationState])
+}
+
+model AuditLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String? @db.ObjectId
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json     @default("{}")
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+}

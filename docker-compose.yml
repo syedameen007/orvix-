@@ -1,0 +1,34 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: orvix-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: orvix
+      MONGO_INITDB_ROOT_PASSWORD: orvix_dev_password
+      MONGO_INITDB_DATABASE: orvix
+    ports:
+      - "27017:27017"
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - orvix_mongo:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh -u orvix -p orvix_dev_password --authenticationDatabase admin --eval \"try { rs.status().ok } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}).ok }\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: orvix-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  orvix_mongo:

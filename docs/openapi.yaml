@@ -1,0 +1,283 @@
+openapi: 3.1.0
+info:
+  title: ORVIX API
+  version: 0.2.0
+  description: Database-backed API for ORVIX nutrition, workouts, progress, scanners, and AI coaching.
+servers:
+  - url: http://localhost:4000
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+paths:
+  /health:
+    get:
+      security: []
+      responses:
+        "200":
+          description: Service health.
+  /auth/register:
+    post:
+      security: []
+      responses:
+        "201":
+          description: Registers a user, profile, and session.
+  /auth/login:
+    post:
+      security: []
+      responses:
+        "200":
+          description: Creates an authenticated session token.
+  /auth/logout:
+    post:
+      summary: Revoke the current session.
+      responses:
+        "200":
+          description: Signed out.
+  /auth/me:
+    get:
+      summary: Current user and profile.
+      responses:
+        "200":
+          description: The signed-in user.
+  /auth/change-password:
+    post:
+      summary: Change password and sign out all other devices.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { type: string, minLength: 10, description: "At least one letter and one number." }
+      responses:
+        "200":
+          description: Password changed.
+        "400":
+          description: Current password incorrect or new password too weak.
+  /auth/export:
+    get:
+      summary: Download all of the user's data as JSON (data portability).
+      responses:
+        "200":
+          description: JSON export attachment.
+  /auth/account:
+    delete:
+      summary: Schedule account deletion. Requires the account password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "200":
+          description: Deletion scheduled and all sessions revoked.
+        "400":
+          description: Password incorrect.
+  /profile/onboard:
+    post:
+      summary: Complete onboarding and compute daily calorie, macro and water targets.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, goal, sex, age, heightCm, weightKg, activityLevel]
+              properties:
+                name: { type: string }
+                goal: { type: string, enum: [LOSE_FAT, BUILD_MUSCLE, MAINTAIN, GET_FITTER] }
+                sex: { type: string, enum: [MALE, FEMALE, OTHER] }
+                age: { type: integer, minimum: 13, maximum: 100 }
+                heightCm: { type: number, minimum: 100, maximum: 250 }
+                weightKg: { type: number, minimum: 30, maximum: 300 }
+                targetWeightKg: { type: number, nullable: true }
+                activityLevel: { type: string, enum: [SEDENTARY, LIGHT, MODERATE, ACTIVE] }
+                trainingExperience: { type: string, enum: [BEGINNER, INTERMEDIATE, ADVANCED] }
+      responses:
+        "200":
+          description: Saved profile and the calculated targets.
+  /water/daily:
+    get:
+      summary: Water intake for a day (defaults to today).
+      parameters:
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: Total and individual entries.
+  /water:
+    post:
+      summary: Log a water entry (max 3000 ml per entry).
+      responses:
+        "201":
+          description: Entry created.
+  /water/{id}:
+    delete:
+      summary: Remove a water entry.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204":
+          description: Removed.
+  /profile:
+    get:
+      responses:
+        "200":
+          description: Current user's profile.
+    put:
+      responses:
+        "200":
+          description: Updates current user's profile and targets.
+  /foods/search:
+    get:
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Database-backed food search results.
+  /foods/barcode/{code}:
+    get:
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product found in ORVIX database.
+        "404":
+          description: Product not found; returns unknown-barcode next actions and provider configuration state.
+  /foods/custom:
+    post:
+      responses:
+        "201":
+          description: Creates a user-submitted custom food.
+  /meals/daily:
+    get:
+      responses:
+        "200":
+          description: Daily meals, totals, and profile targets.
+  /meals:
+    post:
+      responses:
+        "201":
+          description: Creates a meal with deterministic server-side nutrition totals.
+  /recipes:
+    get:
+      responses:
+        "200":
+          description: User recipes.
+    post:
+      responses:
+        "201":
+          description: Creates a recipe and calculates per-serving nutrition.
+  /exercises/search:
+    get:
+      responses:
+        "200":
+          description: Database-backed exercise search results.
+  /exercises/custom:
+    post:
+      responses:
+        "201":
+          description: Creates a user-owned custom exercise.
+  /workouts/starters:
+    get:
+      summary: Ready-made beginner routines.
+      responses:
+        "200":
+          description: List of starter routines with their exercises, sets and reps.
+  /workouts/starters/{key}:
+    post:
+      summary: Add a starter routine to the user's workouts (idempotent).
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string } }
+      responses:
+        "201":
+          description: Workout created.
+        "200":
+          description: User already had this routine; returned as is.
+        "404":
+          description: Unknown routine key.
+        "409":
+          description: Exercise library not seeded yet.
+  /workouts:
+    get:
+      responses:
+        "200":
+          description: User workout templates.
+    post:
+      responses:
+        "201":
+          description: Creates a custom named workout template.
+  /workouts/{id}/start:
+    post:
+      responses:
+        "201":
+          description: Starts a new workout session without copying prior actual set values.
+  /workouts/sessions/{sessionExerciseId}/sets:
+    post:
+      responses:
+        "201":
+          description: Adds an actual performed set to a session exercise.
+  /programs:
+    get:
+      responses:
+        "200":
+          description: User training programs.
+    post:
+      responses:
+        "201":
+          description: Creates a custom training program with custom day names.
+  /progress:
+    get:
+      responses:
+        "200":
+          description: User weight, measurements, and progress photo metadata.
+  /scanner/voice:
+    post:
+      responses:
+        "200":
+          description: Parses voice food logging text and resolves possible database matches.
+  /scanner/ocr:
+    post:
+      responses:
+        "501":
+          description: OCR provider boundary when credentials are unavailable.
+  /scanner/food-photo:
+    post:
+      responses:
+        "501":
+          description: Vision provider boundary when credentials are unavailable.
+  /ai/chat:
+    post:
+      responses:
+        "202":
+          description: AI provider accepted a request.
+        "501":
+          description: AI provider boundary when credentials are unavailable.
+  /admin/overview:
+    get:
+      responses:
+        "200":
+          description: Admin overview counts.
+  /admin/foods:
+    get:
+      responses:
+        "200":
+          description: Food verification queue.
